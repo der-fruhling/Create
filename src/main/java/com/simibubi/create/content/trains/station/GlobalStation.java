@@ -198,6 +198,8 @@ public class GlobalStation extends SingleBlockEntityEdgePoint {
 					&& level.getBlockEntity(pos) instanceof PostboxBlockEntity ppbe) {
 					postboxInventory = ppbe.inventory;
 					box = ppbe;
+				} else {
+					pos.above();
 				}
 
 				for (int slot = 0; slot < postboxInventory.getSlots(); slot++) {
@@ -212,6 +214,11 @@ public class GlobalStation extends SingleBlockEntityEdgePoint {
 						continue;
 
 					postboxInventory.setStackInSlot(slot, ItemStack.EMPTY);
+
+					if (postboxInventory == port.offlineBuffer) {
+						port.primed = true;
+					}
+
 					Create.RAILWAYS.markTracksDirty();
 					if (box != null)
 						box.spawnParticles();
@@ -242,6 +249,10 @@ public class GlobalStation extends SingleBlockEntityEdgePoint {
 					ItemStack result = ItemHandlerHelper.insertItemStacked(postboxInventory, stack, false);
 					if (!result.isEmpty())
 						continue;
+
+					if (postboxInventory == port.offlineBuffer) {
+						port.primed = true;
+					}
 
 					Create.RAILWAYS.markTracksDirty();
 					carriageInventory.setStackInSlot(slot, ItemStack.EMPTY);

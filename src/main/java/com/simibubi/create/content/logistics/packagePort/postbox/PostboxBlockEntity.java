@@ -1,9 +1,13 @@
 package com.simibubi.create.content.logistics.packagePort.postbox;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 
 import com.simibubi.create.AllSoundEvents;
 import com.simibubi.create.Create;
+import com.simibubi.create.content.logistics.box.PackageEntity;
+import com.simibubi.create.content.logistics.box.PackageItem;
 import com.simibubi.create.content.logistics.packagePort.PackagePortBlockEntity;
 import com.simibubi.create.content.trains.station.GlobalStation;
 import com.simibubi.create.content.trains.station.GlobalStation.GlobalPackagePort;
@@ -15,6 +19,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BoneMealItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -28,17 +33,95 @@ public class PostboxBlockEntity extends PackagePortBlockEntity {
 	public boolean forceFlag;
 
 	private boolean sendParticles;
+	private boolean isDirtied = false;
 
 	public PostboxBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
 		super(type, pos, state);
 		trackedGlobalStation = new WeakReference<>(null);
 		flag = LerpedFloat.linear()
 			.startWithValue(0);
+
+		GlobalStation station = trackedGlobalStation.get();
+		if(station != null && station.connectedPorts.containsKey(worldPosition)) {
+			GlobalPackagePort globalPackagePort = station.connectedPorts.get(worldPosition);
+			for (int i = 0; i < inventory.getSlots(); i++) {
+				inventory.setStackInSlot(i, globalPackagePort.offlineBuffer.getStackInSlot(i));
+			}
+
+			Create.RAILWAYS.markTracksDirty();
+		}
+
+		inventory.whenContentsChanged(integer -> isDirtied = true);
+	}
+
+	private void updateInventoryFromStation() {
+		GlobalStation station = trackedGlobalStation.get();
+		if(station != null && station.connectedPorts.containsKey(worldPosition)) {
+			GlobalPackagePort globalPackagePort = station.connectedPorts.get(worldPosition);
+			List<ItemStack> overflow = new ArrayList<>();
+
+			if(!isDirtied && !globalPackagePort.primed) return;
+			isDirtied = false;
+
+			for (int i = 0; i < inventory.getSlots(); i++) {
+				ItemStack offline = globalPackagePort.offlineBuffer.getStackInSlot(i);
+				ItemStack self = inventory.getStackInSlot(i);
+
+				if(!offline.isEmpty() && self.isEmpty()) {
+					inventory.setStackInSlot(i, offline);
+				} else if(offline.isEmpty() && !self.isEmpty()) {
+					globalPackagePort.offlineBuffer.setStackInSlot(i, self);
+				} else if(!offline.isEmpty() && !self.isEmpty()) {
+					if(offline.is(self.getItem()) && offline.getCount() == self.getCount()) {
+						// both are equal
+						inventory.setStackInSlot(i, offline);
+					} else {
+						// items in conflict
+						// trust offline buffer for this slot and attempt to
+						// fit extra item in another slot later
+						inventory.setStackInSlot(i, offline);
+						overflow.add(self);
+					}
+				} else if (!overflow.isEmpty()) {
+					// both slots empty (attempt to empty overflow)
+					ItemStack rem = inventory.insertItem(i, overflow.get(0), false);
+
+					if (rem.isEmpty()) {
+						overflow.remove(0);
+					} else {
+						overflow.set(0, rem);
+					}
+				}
+			}
+
+			if (level != null) {
+				for (ItemStack item : overflow) {
+					if (PackageItem.isPackage(item)) {
+						PackageEntity e = new PackageEntity(level, worldPosition.getX() + 0.5, worldPosition.getY() + 1, worldPosition.getZ() + 0.5);
+						e.setBox(item);
+						level.addFreshEntity(e);
+					} else {
+						level.addFreshEntity(new ItemEntity(level, worldPosition.getX() + 0.5, worldPosition.getY() + 1, worldPosition.getZ() + 0.5, item));
+					}
+				}
+			}
+
+			for (int i = 0; i < inventory.getSlots(); i++) {
+				globalPackagePort.offlineBuffer.setStackInSlot(i, inventory.getStackInSlot(i));
+			}
+
+			Create.RAILWAYS.markTracksDirty();
+		}
 	}
 
 	@Override
 	public void tick() {
 		super.tick();
+
+		if (!level.isClientSide) {
+			updateInventoryFromStation();
+		}
+
 		if (!level.isClientSide && !isVirtual()) {
 			if (sendParticles)
 				sendData();
@@ -90,7 +173,7 @@ public class PostboxBlockEntity extends PackagePortBlockEntity {
 		sendParticles = clientPacket && tag.contains("Particles");
 	}
 
-	@Override
+	/*@Override
 	public void onChunkUnloaded() {
 		if (level == null || level.isClientSide)
 			return;
@@ -108,6 +191,5 @@ public class PostboxBlockEntity extends PackagePortBlockEntity {
 		globalPackagePort.primed = true;
 		Create.RAILWAYS.markTracksDirty();
 		super.onChunkUnloaded();
-	}
-
+	}*/
 }
