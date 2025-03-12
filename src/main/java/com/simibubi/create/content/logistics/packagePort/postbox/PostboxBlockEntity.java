@@ -172,24 +172,4 @@ public class PostboxBlockEntity extends PackagePortBlockEntity {
 		super.read(tag, clientPacket);
 		sendParticles = clientPacket && tag.contains("Particles");
 	}
-
-	/*@Override
-	public void onChunkUnloaded() {
-		if (level == null || level.isClientSide)
-			return;
-		GlobalStation station = trackedGlobalStation.get();
-		if (station == null)
-			return;
-		if (!station.connectedPorts.containsKey(worldPosition))
-			return;
-		GlobalPackagePort globalPackagePort = station.connectedPorts.get(worldPosition);
-		for (int i = 0; i < inventory.getSlots(); i++) {
-			globalPackagePort.offlineBuffer.setStackInSlot(i, inventory.getStackInSlot(i));
-			inventory.setStackInSlot(i, ItemStack.EMPTY);
-		}
-
-		globalPackagePort.primed = true;
-		Create.RAILWAYS.markTracksDirty();
-		super.onChunkUnloaded();
-	}*/
 }
